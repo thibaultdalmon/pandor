@@ -1,7 +1,6 @@
 package main
 
-import "fmt"
-
 func main() {
-	fmt.Println("Hello World")
+	e := newRouter()
+	e.Logger.Fatal(e.Start(":1323"))
 }
