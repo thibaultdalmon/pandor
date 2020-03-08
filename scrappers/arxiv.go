@@ -11,12 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"pandor/logger"
 	"pandor/models"
 
 	"code.sajari.com/docconv"
-	"github.com/gocolly/colly"
-	"github.com/gocolly/colly/debug"
-	"github.com/gocolly/colly/queue"
+	"github.com/gocolly/colly/v2"
+	"github.com/gocolly/colly/v2/debug"
+	"github.com/gocolly/colly/v2/queue"
 	"go.uber.org/zap"
 )
 
@@ -96,20 +97,13 @@ func DownloadAndSaveToDir(url, file, dir string) error {
 func LaunchArXiv() {
 	url := Domain + "/abs/"
 
-	logger, err := zap.NewProduction()
-	if err != nil {
-		log.Fatalf("can't initialize zap logger: %v", err)
-	}
-	defer logger.Sync()
-
 	// create a request queue with 2 consumer threads
-	var q *queue.Queue
-	q, err = queue.New(
+	q, err := queue.New(
 		4, // Number of consumer threads
 		&queue.InMemoryQueueStorage{MaxSize: 10000}, // Use default queue storage
 	)
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("can't initialize queue: %v", err))
+		logger.Logger.Fatal(fmt.Sprintf("can't initialize queue: %v", err))
 	}
 
 	// Instantiate default collector
@@ -137,9 +131,10 @@ func LaunchArXiv() {
 
 		article.HTMLResponse = string(e.Response.Body)
 
-		article.URL = e.Request.Ctx.Get("url")
+		article.MetaURL = e.Request.Ctx.Get("url")
 
-		article.CrawledAt = time.Now().UTC()
+		crawlingTime := time.Now().UTC()
+		article.CrawledAt = crawlingTime
 
 		article.Title = strings.SplitAfterN(e.ChildText(`h1.title`), "\n", 2)[1]
 
@@ -150,76 +145,79 @@ func LaunchArXiv() {
 
 		// Authors
 		authors := e.ChildTexts(`div.authors a`)
-		article.Authors = make([]string, len(authors))
-		copy(article.Authors, authors)
+		article.Authors = make([]models.Author, len(authors))
+		for author := 0; author < len(authors); author++ {
+			article.Authors[author].Name = authors[author]
+		}
 
 		// SubmissionDate
 		SubmissionDateStr := e.ChildText(`div.dateline`)
 		re := regexp.MustCompile(`\d{2}\s\w{3}\s\d{4}`)
+		var SubmissionDateT time.Time
 		if re.MatchString(SubmissionDateStr) {
 			SubmissionDateStrFmted := re.FindString(SubmissionDateStr)
-			SubmissionDateT, err := time.Parse("2 Jan 2006", SubmissionDateStrFmted)
+			SubmissionDateT, err = time.Parse("2 Jan 2006", SubmissionDateStrFmted)
 			if err == nil {
 				article.SubmissionDate = SubmissionDateT
 			} else {
-				logger.Error(fmt.Sprintf("SubmissionDate Parsing Error: %v", err))
+				logger.Logger.Error(fmt.Sprintf("SubmissionDate Parsing Error: %v", err))
 			}
 		}
 
 		// Article Links
 		if attr, ok := e.DOM.Find(`div.full-text li a`).First().Attr(`href`); ok {
-			article.PDF = Domain + attr
+			article.PDFURL = Domain + attr
 		}
 		re = regexp.MustCompile(`\d{4}.((\d{5}$)|(\d{4}$))`)
-		filePath := re.FindString(article.PDF) + ".pdf"
-		err = DownloadAndSaveToDir(article.PDF, filePath, TempDir)
+		filePath := re.FindString(article.PDFURL) + ".pdf"
+		err = DownloadAndSaveToDir(article.PDFURL, filePath, TempDir)
 		if err != nil {
-			logger.Error(fmt.Sprintf("FILE Error %v", err))
+			logger.Logger.Error(fmt.Sprintf("FILE Error %v", err))
 		}
 
 		if attr, ok := e.DOM.Find(`div.full-text li a`).Last().Attr(`href`); ok {
-			article.Format = Domain + attr
+			article.OtherFormatURL = Domain + attr
 		}
 
-		logger.Debug("New Article",
-			zap.String("URL:", article.URL),
+		logger.Logger.Debug("New Article",
+			zap.String("URL:", article.MetaURL),
 			zap.Time("CrawledAt:", article.CrawledAt),
 			zap.String("Title:", article.Title),
 			zap.String("Abstract:", article.Abstract),
 			zap.Int("Nb Authors:", len(article.Authors)),
-			zap.String("Last Author:", article.Authors[len(article.Authors)-1]),
+			zap.String("Last Author:", article.Authors[len(article.Authors)-1].Name),
 			zap.Time("Submission Date:", article.SubmissionDate),
-			zap.String("PDF:", article.PDF),
-			zap.String("Format:", article.Format),
+			zap.String("PDF:", article.PDFURL),
+			zap.String("Format:", article.OtherFormatURL),
 		)
 	})
 
 	// Before making a request print "Visiting ..."
 	c.OnRequest(func(r *colly.Request) {
 		r.Ctx.Put("url", r.URL.String())
-		logger.Info(fmt.Sprintf("Visiting %s", r.URL.String()))
+		logger.Logger.Info(fmt.Sprintf("Visiting %s", r.URL.String()))
 	})
 	// Set error handler
 	c.OnError(func(r *colly.Response, err error) {
-		logger.Error(fmt.Sprintf("Request URL: %s failed with response: %v", r.Request.URL, r),
+		logger.Logger.Error(fmt.Sprintf("Request URL: %s failed with response: %v", r.Request.URL, r),
 			zap.String("Error:", fmt.Sprintf("%v", err)),
 		)
 	})
 	// Called after OnHTML
 	c.OnScraped(func(r *colly.Response) {
-		logger.Info(fmt.Sprintf("Finished %s", r.Request.URL))
+		logger.Logger.Info(fmt.Sprintf("Finished %s", r.Request.URL))
 		URL := r.Request.URL.String()
 		Base := regexp.MustCompile(`.*\d{4}\.`)
 		URLBase := Base.FindString(URL)
 		Number := regexp.MustCompile(`(\d{5}$)|(\d{4}$)`)
 		ArticleNumber, err := strconv.Atoi(Number.FindString(URL))
 		if err != nil {
-			logger.Error(fmt.Sprintf("Error: %v", err))
+			logger.Logger.Error(fmt.Sprintf("Error: %v", err))
 		}
 		if ArticleNumber < 2 {
 			// Visit next article
 			r.Request.Visit(fmt.Sprintf("%s%05d", URLBase, ArticleNumber+1))
-			logger.Info(fmt.Sprintf("Adding %s%05d", URLBase, ArticleNumber+1))
+			logger.Logger.Info(fmt.Sprintf("Adding %s%05d", URLBase, ArticleNumber+1))
 		}
 	})
 	// Start scraping
@@ -232,5 +230,4 @@ func LaunchArXiv() {
 	q.Run(c)
 	// Wait until threads are finished
 	c.Wait()
-
 }
