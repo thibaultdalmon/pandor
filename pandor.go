@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/thibaultdalmon/pandor/scrappers"
+	"pandor/scrappers"
 )
 
 func main() {

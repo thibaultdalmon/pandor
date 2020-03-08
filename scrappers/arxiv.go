@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thibaultdalmon/pandor/models"
+	"pandor/models"
 
 	"code.sajari.com/docconv"
 	"github.com/gocolly/colly"

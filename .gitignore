@@ -131,3 +131,6 @@ dmypy.json
 # Temp directories
 *tmp/
 *.DS_Store
+
+*Executable
+pandor
