@@ -17,15 +17,13 @@ type Article struct {
 	MetaURL        string    `json:"metaurl,omitempty"`
 	Authors        []Author  `json:"authors,omitempty"`
 	CitedPapers    []Article `json:"citedpapers,omitempty"`
-	CitedBy        []Article `json:"citedby,omitempty"`
 	DType          []string  `json:"dgraph.type,omitempty"`
 }
 
 // Author type
 type Author struct {
-	UID   string `json:"uid,omitempty"`
-	Name  string `json:"name,omitempty"`
-	Wrote []Article
+	UID   string   `json:"uid,omitempty"`
+	Name  string   `json:"name,omitempty"`
 	DType []string `json:"dgraph.type,omitempty"`
 }
 
@@ -40,9 +38,8 @@ var Schema = `
   pdfurl: string .
   otherformaturl: string .
   metaurl: string .
-  authors: [uid] .
-  citedpapers: [uid] .
-  citedby: [uid] .
+  authors: [uid] @reverse .
+  citedpapers: [uid] @reverse .
   wrote: [uid] .
 
   type Article {
@@ -56,11 +53,9 @@ var Schema = `
     metaurl: string
     authors: [Author]
     citedpapers: [Article]
-    citedby: [Article]
   }
 
   type Author {
     name: string
-    wrote: [Article]
   }
 `

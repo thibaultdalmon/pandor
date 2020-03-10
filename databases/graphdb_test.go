@@ -55,9 +55,7 @@ func TestDB(t *testing.T) {
 				DType: []string{"Author"},
 			},
 		},
-		CitedPapers: []models.Article{},
-		CitedBy:     []models.Article{},
-		DType:       []string{"Article"},
+		DType: []string{"Article"},
 	}
 
 	response, err := AddArticle(article, dg)
