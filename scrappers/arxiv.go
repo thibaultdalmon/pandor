@@ -2,10 +2,6 @@ package scrappers
 
 import (
 	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,8 +9,8 @@ import (
 
 	"pandor/logger"
 	"pandor/models"
+	"pandor/utils"
 
-	"code.sajari.com/docconv"
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/debug"
 	"github.com/gocolly/colly/v2/queue"
@@ -26,72 +22,6 @@ var Domain = "https://export.arxiv.org"
 
 // TempDir is the directory to store temporary files
 var TempDir = "./tmp/"
-
-// ParsePDF converts a PDF to a string
-func ParsePDF(inputPath string) error {
-	res, err := docconv.ConvertPath(inputPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(res)
-
-	return err
-}
-
-// exists returns whether the given file or directory exists
-func exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return true, err
-}
-
-// DownloadAndSaveToDir is an helper function to save the result of a GET Request
-func DownloadAndSaveToDir(url, file, dir string) error {
-	// Create the file
-	if dirExists, err := exists(dir); dirExists {
-		if err != nil {
-			return err
-		}
-	} else {
-		err = os.MkdirAll(dir, 0777)
-		if err != nil {
-			return err
-		}
-	}
-
-	var out *os.File
-	if dirExists, err := exists(dir + file); dirExists {
-		if err != nil {
-			return err
-		}
-	} else {
-		out, err = os.Create(dir + file)
-		defer out.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	// Get the data
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Write the body to file
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // LaunchArXiv creates an ArXiv web crawler and runs it
 func LaunchArXiv() {
@@ -170,9 +100,9 @@ func LaunchArXiv() {
 		}
 		re = regexp.MustCompile(`\d{4}.((\d{5}$)|(\d{4}$))`)
 		filePath := re.FindString(article.PDFURL) + ".pdf"
-		err = DownloadAndSaveToDir(article.PDFURL, filePath, TempDir)
+		err = utils.DownloadAndSaveToDir(article.PDFURL, filePath, TempDir)
 		if err != nil {
-			logger.Logger.Error(fmt.Sprintf("FILE Error %v", err))
+			logger.Logger.Error(fmt.Sprintf("FILE Error: %v", err))
 		}
 
 		if attr, ok := e.DOM.Find(`div.full-text li a`).Last().Attr(`href`); ok {
