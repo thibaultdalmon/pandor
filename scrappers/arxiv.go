@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"pandor/databases"
 	"pandor/logger"
 	"pandor/models"
-	"pandor/utils"
 
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/debug"
@@ -26,6 +26,22 @@ var TempDir = "./tmp/"
 // LaunchArXiv creates an ArXiv web crawler and runs it
 func LaunchArXiv() {
 	url := Domain + "/abs/"
+
+	conn, dg, err := databases.NewClient()
+	if err != nil {
+		logger.Logger.Fatal(err.Error())
+	}
+	defer conn.Close()
+
+	err = databases.DropAll(dg)
+	if err != nil {
+		logger.Logger.Error(err.Error())
+	}
+
+	err = databases.LoadSchema(models.Schema, dg)
+	if err != nil {
+		logger.Logger.Fatal(err.Error())
+	}
 
 	// create a request queue with 2 consumer threads
 	q, err := queue.New(
@@ -67,6 +83,8 @@ func LaunchArXiv() {
 		article.CrawledAt = crawlingTime
 
 		article.Title = strings.SplitAfterN(e.ChildText(`h1.title`), "\n", 2)[1]
+		article.UID = models.FormatUID(article.Title)
+		article.DType = []string{"Article"}
 
 		article.Abstract = strings.SplitAfterN(
 			e.ChildText(`blockquote.abstract`),
@@ -78,6 +96,8 @@ func LaunchArXiv() {
 		article.Authors = make([]models.Author, len(authors))
 		for author := 0; author < len(authors); author++ {
 			article.Authors[author].Name = authors[author]
+			article.Authors[author].UID = models.FormatUID(authors[author])
+			article.Authors[author].DType = []string{"Author"}
 		}
 
 		// SubmissionDate
@@ -98,15 +118,26 @@ func LaunchArXiv() {
 		if attr, ok := e.DOM.Find(`div.full-text li a`).First().Attr(`href`); ok {
 			article.PDFURL = Domain + attr
 		}
-		re = regexp.MustCompile(`\d{4}.((\d{5}$)|(\d{4}$))`)
-		filePath := re.FindString(article.PDFURL) + ".pdf"
-		err = utils.DownloadAndSaveToDir(article.PDFURL, filePath, TempDir)
-		if err != nil {
-			logger.Logger.Error(fmt.Sprintf("FILE Error: %v", err))
-		}
+		// re = regexp.MustCompile(`\d{4}.((\d{5}$)|(\d{4}$))`)
+		// filePath := re.FindString(article.PDFURL) + ".pdf"
+		// err = utils.DownloadAndSaveToDir(article.PDFURL, filePath, TempDir)
+		// if err != nil {
+		// 	logger.Logger.Error(fmt.Sprintf("FILE Error: %v", err))
+		// }
 
 		if attr, ok := e.DOM.Find(`div.full-text li a`).Last().Attr(`href`); ok {
 			article.OtherFormatURL = Domain + attr
+		}
+
+		conn, dg, err := databases.NewClient()
+		if err != nil {
+			logger.Logger.Error(err.Error())
+		}
+		defer conn.Close()
+
+		_, err = databases.AddArticle(article, dg)
+		if err != nil {
+			logger.Logger.Error(err.Error())
 		}
 
 		logger.Logger.Debug("New Article",
@@ -151,8 +182,8 @@ func LaunchArXiv() {
 		}
 	})
 	// Start scraping
-	for i := 8; i < 9; i++ {
-		for j := 1; j < 2; j++ {
+	for i := 8; i < 21; i++ {
+		for j := 1; j < 13; j++ {
 			// Add URLs to the queue
 			q.AddURL(fmt.Sprintf("%s%02d%02d.00001", url, i, j))
 		}

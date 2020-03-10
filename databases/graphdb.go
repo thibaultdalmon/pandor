@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"pandor/logger"
 	"pandor/models"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -13,19 +13,19 @@ import (
 )
 
 // NewClient builds a new Dgraph Client
-func NewClient() (*dgo.Dgraph, error) {
+func NewClient() (*grpc.ClientConn, *dgo.Dgraph, error) {
 	// Dial a gRPC connection. The address to dial to can be configured when
 	// setting up the dgraph cluster.
 	d, err := grpc.Dial("localhost:9080", grpc.WithInsecure())
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err.Error())
 	}
 
-	return dgo.NewDgraphClient(
+	return d, dgo.NewDgraphClient(
 		api.NewDgraphClient(d)), err
 }
 
-// Drop all data including schema from the dgraph instance. This is useful
+// DropAll data including schema from the dgraph instance. This is useful
 // for small examples such as this, since it puts dgraph into a clean
 // state.
 func DropAll(dg *dgo.Dgraph) error {
@@ -42,7 +42,7 @@ func LoadSchema(schema string, dg *dgo.Dgraph) error {
 	ctx := context.Background()
 	err := dg.Alter(ctx, op)
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err.Error())
 	}
 	return err
 }
@@ -54,14 +54,14 @@ func AddArticle(article models.Article, dg *dgo.Dgraph) (*api.Response, error) {
 	}
 	pb, err := json.Marshal(article)
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err.Error())
 	}
 
 	mu.SetJson = pb
 	ctx := context.Background()
 	response, err := dg.NewTxn().Mutate(ctx, mu)
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err.Error())
 	}
 	return response, err
 }
@@ -71,7 +71,7 @@ func Query(query string, variables map[string]string, dg *dgo.Dgraph) (*api.Resp
 	ctx := context.Background()
 	resp, err := dg.NewTxn().QueryWithVars(ctx, query, variables)
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err.Error())
 	}
 
 	return resp, err
@@ -86,7 +86,7 @@ func Format(resp *api.Response) error {
 	var r Root
 	err := json.Unmarshal(resp.Json, &r)
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err.Error())
 	}
 
 	out, _ := json.MarshalIndent(r, "", "\t")

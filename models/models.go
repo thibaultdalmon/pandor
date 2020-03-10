@@ -31,8 +31,8 @@ type Author struct {
 
 // Schema describing the types
 var Schema = `
-  title: string @index(exact) .
-  name: string .
+  title: string @index(term, exact, fulltext, trigram) .
+  name: string @index(term, exact, fulltext, trigram) .
   abstract: string .
   submissiondate: datetime .
   crawledat: datetime .
@@ -44,7 +44,6 @@ var Schema = `
   citedpapers: [uid] .
   citedby: [uid] .
   wrote: [uid] .
-  type: string .
 
   type Article {
     title: string
@@ -58,7 +57,6 @@ var Schema = `
     authors: [Author]
     citedpapers: [Article]
     citedby: [Article]
-    type: string
   }
 
   type Author {

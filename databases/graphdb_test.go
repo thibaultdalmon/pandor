@@ -3,27 +3,15 @@ package databases
 import (
 	"log"
 	"pandor/models"
-	"strings"
 	"testing"
-	"time"
 )
 
-func makeUID(s string) string {
-	uid := "_:" + strings.ToLower(s)
-	uid = strings.ReplaceAll(uid, " ", "")
-	return uid
-}
-
-func makeTime(s string) time.Time {
-	t, _ := time.Parse("2006-01-02T15:04:05.000Z", s)
-	return t
-}
-
 func TestDB(t *testing.T) {
-	dg, err := NewClient()
+	d, dg, err := NewClient()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer d.Close()
 
 	err = DropAll(dg)
 	if err != nil {
@@ -35,10 +23,10 @@ func TestDB(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	uidarticle := makeUID("Globular clusters in the outer halo of M31: the survey")
-	uidauthor := makeUID("G. F. Lewis")
-	sub := makeTime("2007-12-28T00:00:00.000Z")
-	crw := makeTime("2020-03-08T08:44:03.484Z")
+	uidarticle := models.FormatUID("Globular clusters in the outer halo of M31: the survey")
+	uidauthor := models.FormatUID("G. F. Lewis")
+	sub := models.FormatTime("2007-12-28T00:00:00.000Z")
+	crw := models.FormatTime("2020-03-08T08:44:03.484Z")
 	article := models.Article{
 		UID:   uidarticle,
 		Title: "Globular clusters in the outer halo of M31: the survey",
