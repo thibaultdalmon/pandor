@@ -24,13 +24,15 @@ type Article struct {
 type Author struct {
 	UID   string   `json:"uid,omitempty"`
 	Name  string   `json:"name,omitempty"`
+	URL   string   `json:"url,omitempty"`
 	DType []string `json:"dgraph.type,omitempty"`
 }
 
 // Schema describing the types
 var Schema = `
-  title: string @index(term, exact, fulltext, trigram) .
-  name: string @index(term, exact, fulltext, trigram) .
+  title: string @index(term, exact, hash, fulltext, trigram) .
+  name: string @index(term, exact, hash, fulltext, trigram) .
+	url: string @index(hash) .
   abstract: string .
   submissiondate: datetime .
   crawledat: datetime .
@@ -57,5 +59,6 @@ var Schema = `
 
   type Author {
     name: string
+		url: string
   }
 `

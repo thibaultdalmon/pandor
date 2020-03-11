@@ -66,31 +66,60 @@ func AddArticle(article models.Article, dg *dgo.Dgraph) (*api.Response, error) {
 	return response, err
 }
 
-// Query allows to send a query to Dgraph
-func Query(query string, variables map[string]string, dg *dgo.Dgraph) (*api.Response, error) {
+// QueryWithVars allows to send a query to Dgraph with a var dict
+func QueryWithVars(query string, variables map[string]string, dg *dgo.Dgraph) (api.Response, error) {
 	ctx := context.Background()
 	resp, err := dg.NewTxn().QueryWithVars(ctx, query, variables)
 	if err != nil {
 		logger.Logger.Fatal(err.Error())
 	}
 
-	return resp, err
+	return *resp, err
 }
 
-// Format allows to extract the information from a Response
-func Format(resp *api.Response) error {
-	type Root struct {
-		Me []models.Article `json:"me"`
+// Query allows to send a query to Dgraph
+func Query(query string, dg *dgo.Dgraph) (api.Response, error) {
+	ctx := context.Background()
+	resp, err := dg.NewTxn().Query(ctx, query)
+	if err != nil {
+		logger.Logger.Fatal(err.Error())
 	}
+	fmt.Println(string(resp.Json))
 
-	var r Root
-	err := json.Unmarshal(resp.Json, &r)
+	return *resp, err
+}
+
+// GetAuthorUID gives the UID of a given author
+func GetAuthorUID(name string, dg *dgo.Dgraph) (string, error) {
+	variables := map[string]string{"$name": name}
+	query := `query GetUID($name: string){
+							getuid(func: eq(name, $name)){
+								uid
+						  }
+						}`
+	resp, err := QueryWithVars(query, variables, dg)
 	if err != nil {
 		logger.Logger.Fatal(err.Error())
 	}
 
-	out, _ := json.MarshalIndent(r, "", "\t")
-	fmt.Printf("%s\n", out)
+	type Root struct {
+		Authors []models.Author `json:"getuid"`
+	}
 
-	return err
+	var r Root
+	err = json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		logger.Logger.Fatal(err.Error())
+	}
+
+	if len(r.Authors) == 0 {
+		return "", fmt.Errorf("No Author Found")
+	}
+
+	return r.Authors[0].UID, nil
+}
+
+// IsArticleInDB returns if an Article is already in Dgraph
+func IsArticleInDB(title string, dg *dgo.Dgraph) (bool, error) {
+	return true, nil
 }

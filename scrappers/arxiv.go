@@ -23,6 +23,24 @@ var Domain = "https://export.arxiv.org"
 // TempDir is the directory to store temporary files
 var TempDir = "./tmp/"
 
+// ExtractNameFromURL extracts the name of an author from its URL
+func ExtractNameFromURL(url string) (string, error) {
+	re := regexp.MustCompile(`^.*\+`)
+	if !re.MatchString(url) {
+		logger.Logger.Error("Prefix not Found")
+	}
+	prefix := re.FindString(url)
+	re = regexp.MustCompile(`/.*$`)
+	if !re.MatchString(url) {
+		logger.Logger.Error("Suffix not Found")
+	}
+	url = strings.Replace(url, prefix, "", 1)
+	suffix := re.FindString(url)
+	url = strings.Replace(url, suffix, "", 1)
+
+	return url, nil
+}
+
 // LaunchArXiv creates an ArXiv web crawler and runs it
 func LaunchArXiv() {
 	url := Domain + "/abs/"
@@ -73,6 +91,13 @@ func LaunchArXiv() {
 	})
 
 	c.OnHTML(`div[id=abs]`, func(e *colly.HTMLElement) {
+
+		conn, dg, err := databases.NewClient()
+		if err != nil {
+			logger.Logger.Error(err.Error())
+		}
+		defer conn.Close()
+
 		article := models.Article{}
 
 		article.HTMLResponse = string(e.Response.Body)
@@ -92,11 +117,22 @@ func LaunchArXiv() {
 			2)[1]
 
 		// Authors
-		authors := e.ChildTexts(`div.authors a`)
-		article.Authors = make([]models.Author, len(authors))
-		for author := 0; author < len(authors); author++ {
-			article.Authors[author].Name = authors[author]
-			article.Authors[author].UID = models.FormatUID(authors[author])
+		authorsURL := e.ChildAttrs(`div.authors a`, `href`)
+		article.Authors = make([]models.Author, len(authorsURL))
+		for author := 0; author < len(authorsURL); author++ {
+			authorURL := authorsURL[author]
+			name, err := ExtractNameFromURL(authorURL)
+			if err != nil {
+				continue
+			}
+			uid, err := databases.GetAuthorUID(name, dg)
+			if err != nil {
+				article.Authors[author].UID = models.FormatUID(name)
+			} else {
+				article.Authors[author].UID = uid
+			}
+			article.Authors[author].URL = Domain + authorURL
+			article.Authors[author].Name = name
 			article.Authors[author].DType = []string{"Author"}
 		}
 
@@ -128,12 +164,6 @@ func LaunchArXiv() {
 		if attr, ok := e.DOM.Find(`div.full-text li a`).Last().Attr(`href`); ok {
 			article.OtherFormatURL = Domain + attr
 		}
-
-		conn, dg, err := databases.NewClient()
-		if err != nil {
-			logger.Logger.Error(err.Error())
-		}
-		defer conn.Close()
 
 		_, err = databases.AddArticle(article, dg)
 		if err != nil {
@@ -182,8 +212,8 @@ func LaunchArXiv() {
 		}
 	})
 	// Start scraping
-	for i := 8; i < 21; i++ {
-		for j := 1; j < 13; j++ {
+	for i := 8; i < 9; i++ {
+		for j := 1; j < 2; j++ {
 			// Add URLs to the queue
 			q.AddURL(fmt.Sprintf("%s%02d%02d.00001", url, i, j))
 		}

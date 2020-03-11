@@ -1,10 +1,34 @@
 package databases
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
+	"pandor/logger"
 	"pandor/models"
 	"testing"
+
+	"github.com/dgraph-io/dgo/v2/protos/api"
 )
+
+// Format allows to extract the information from a Response
+func Format(resp *api.Response) error {
+	type Root struct {
+		Me []models.Author `json:"test"`
+	}
+
+	var r Root
+	err := json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		logger.Logger.Fatal(err.Error())
+	}
+
+	out, _ := json.MarshalIndent(r, "", "\t")
+	fmt.Printf("%s\n", out)
+	fmt.Println(string(resp.Json))
+
+	return err
+}
 
 func TestDB(t *testing.T) {
 	d, dg, err := NewClient()
@@ -23,11 +47,43 @@ func TestDB(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	uidarticle := models.FormatUID("Globular clusters in the outer halo of M31: the survey")
-	uidauthor := models.FormatUID("G. F. Lewis")
-	sub := models.FormatTime("2007-12-28T00:00:00.000Z")
-	crw := models.FormatTime("2020-03-08T08:44:03.484Z")
+	uidarticle := models.FormatUID("Another Article from the same guy")
+	uidauthor := models.FormatUID("Lewis_G")
+	sub := models.FormatTime("2007-12-29T00:00:00.000Z")
+	crw := models.FormatTime("2020-03-09T08:44:03.484Z")
 	article := models.Article{
+		UID:            uidarticle,
+		Title:          "Another Article from the same guy",
+		Abstract:       `Cluster Stuff`,
+		SubmissionDate: sub,
+		CrawledAt:      crw,
+		PDFURL:         "https://export.arxiv.org/pdf/0801.0003",
+		OtherFormatURL: "https://export.arxiv.org/format/0801.0003",
+		MetaURL:        "https://export.arxiv.org/abs/0801.00003",
+		Authors: []models.Author{
+			{
+				UID:   uidauthor,
+				Name:  "Lewis_G",
+				URL:   "https://export.arxiv.org/find/astro-ph/1/au:+Lewis_G/0/1/0/all/0/1",
+				DType: []string{"Author"},
+			},
+		},
+		DType: []string{"Article"},
+	}
+
+	_, err = AddArticle(article, dg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	uidarticle = models.FormatUID("Globular clusters in the outer halo of M31: the survey")
+	uidauthor, err = GetAuthorUID("Lewis_G", dg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sub = models.FormatTime("2007-12-28T00:00:00.000Z")
+	crw = models.FormatTime("2020-03-08T08:44:03.484Z")
+	article = models.Article{
 		UID:   uidarticle,
 		Title: "Globular clusters in the outer halo of M31: the survey",
 		Abstract: `We report the discovery of 40 new globular clusters (GCs)
@@ -51,42 +107,37 @@ func TestDB(t *testing.T) {
 		Authors: []models.Author{
 			{
 				UID:   uidauthor,
-				Name:  "G. F. Lewis",
+				Name:  "Lewis_G",
+				URL:   "https://export.arxiv.org/find/astro-ph/1/au:+Lewis_G/0/1/0/all/0/1",
 				DType: []string{"Author"},
 			},
 		},
 		DType: []string{"Article"},
 	}
 
-	response, err := AddArticle(article, dg)
+	_, err = AddArticle(article, dg)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println(response.Uids)
-
-	variables := map[string]string{"$id1": response.Uids["globularclustersintheouterhaloofm31:thesurvey"]}
-	query := `query PrefArt($id1: string){
-    art(func: uid($id1)) {
+	query := `{
+		test(func: eq(url, "https://export.arxiv.org/find/astro-ph/1/au:+Lewis_G/0/1/0/all/0/1")){
+		uid
+    name
+    url
+    ~authors{
       title
-      abstract
-			submissiondate
-      crawledat
-      pdfurl
-      dgraph.type
-      authors @filter(eq(name, "G. F. Lewis")){
-        name
-        dgraph.type
-      }
     }
-  }`
+  }
+}`
 
-	resp, err := Query(query, variables, dg)
+	var resp api.Response
+	resp, err = Query(query, dg)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = Format(resp)
+	err = Format(&resp)
 	if err != nil {
 		log.Fatal(err)
 	}
