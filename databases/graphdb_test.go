@@ -120,6 +120,11 @@ func TestDB(t *testing.T) {
 		log.Fatal(err)
 	}
 
+	_, err = AddArticle(article, dg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	query := `{
 		test(func: eq(url, "https://export.arxiv.org/find/astro-ph/1/au:+Lewis_G/0/1/0/all/0/1")){
 		uid

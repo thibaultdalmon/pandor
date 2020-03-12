@@ -12,7 +12,6 @@ import (
 	"pandor/models"
 
 	"github.com/gocolly/colly/v2"
-	"github.com/gocolly/colly/v2/debug"
 	"github.com/gocolly/colly/v2/queue"
 	"go.uber.org/zap"
 )
@@ -51,10 +50,10 @@ func LaunchArXiv() {
 	}
 	defer conn.Close()
 
-	err = databases.DropAll(dg)
-	if err != nil {
-		logger.Logger.Error(err.Error())
-	}
+	// err = databases.DropAll(dg)
+	// if err != nil {
+	// 	logger.Logger.Error(err.Error())
+	// }
 
 	err = databases.LoadSchema(models.Schema, dg)
 	if err != nil {
@@ -64,7 +63,7 @@ func LaunchArXiv() {
 	// create a request queue with 2 consumer threads
 	q, err := queue.New(
 		4, // Number of consumer threads
-		&queue.InMemoryQueueStorage{MaxSize: 10000}, // Use default queue storage
+		&queue.InMemoryQueueStorage{MaxSize: 100000}, // Use default queue storage
 	)
 	if err != nil {
 		logger.Logger.Fatal(fmt.Sprintf("can't initialize queue: %v", err))
@@ -72,7 +71,7 @@ func LaunchArXiv() {
 
 	// Instantiate default collector
 	c := colly.NewCollector(
-		colly.Debugger(&debug.LogDebugger{}),
+		// colly.Debugger(&debug.LogDebugger{}),
 		// Visit only domains: export.arxiv.org
 		colly.AllowedDomains("export.arxiv.org"),
 		colly.Async(true),
@@ -87,7 +86,7 @@ func LaunchArXiv() {
 	c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		RandomDelay: 1 * time.Second,
-		Parallelism: 4,
+		Parallelism: 8,
 	})
 
 	c.OnHTML(`div[id=abs]`, func(e *colly.HTMLElement) {
@@ -205,15 +204,15 @@ func LaunchArXiv() {
 		if err != nil {
 			logger.Logger.Error(fmt.Sprintf("Error: %v", err))
 		}
-		if ArticleNumber < 2 {
+		if ArticleNumber < 100 {
 			// Visit next article
 			r.Request.Visit(fmt.Sprintf("%s%05d", URLBase, ArticleNumber+1))
 			logger.Logger.Info(fmt.Sprintf("Adding %s%05d", URLBase, ArticleNumber+1))
 		}
 	})
 	// Start scraping
-	for i := 8; i < 9; i++ {
-		for j := 1; j < 2; j++ {
+	for i := 8; i < 21; i++ {
+		for j := 1; j < 13; j++ {
 			// Add URLs to the queue
 			q.AddURL(fmt.Sprintf("%s%02d%02d.00001", url, i, j))
 		}

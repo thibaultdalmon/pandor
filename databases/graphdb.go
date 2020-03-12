@@ -49,6 +49,11 @@ func LoadSchema(schema string, dg *dgo.Dgraph) error {
 
 // AddArticle adds an article to Dgraph
 func AddArticle(article models.Article, dg *dgo.Dgraph) (*api.Response, error) {
+
+	uid, err := GetArticleUID(article.Title, dg)
+	if err == nil {
+		article.UID = uid
+	}
 	mu := &api.Mutation{
 		CommitNow: true,
 	}
@@ -119,7 +124,33 @@ func GetAuthorUID(name string, dg *dgo.Dgraph) (string, error) {
 	return r.Authors[0].UID, nil
 }
 
-// IsArticleInDB returns if an Article is already in Dgraph
-func IsArticleInDB(title string, dg *dgo.Dgraph) (bool, error) {
-	return true, nil
+// GetArticleUID gives the UID of a given author
+func GetArticleUID(title string, dg *dgo.Dgraph) (string, error) {
+	fmt.Println(title)
+	variables := map[string]string{"$title": title}
+	query := `query GetUID($title: string){
+							getuid(func: eq(title, $title)){
+								uid
+						  }
+						}`
+	resp, err := QueryWithVars(query, variables, dg)
+	if err != nil {
+		logger.Logger.Fatal(err.Error())
+	}
+
+	type Root struct {
+		Articles []models.Article `json:"getuid"`
+	}
+
+	var r Root
+	err = json.Unmarshal(resp.Json, &r)
+	if err != nil {
+		logger.Logger.Fatal(err.Error())
+	}
+
+	if len(r.Articles) == 0 {
+		return "", fmt.Errorf("No Article Found")
+	}
+
+	return r.Articles[0].UID, nil
 }
