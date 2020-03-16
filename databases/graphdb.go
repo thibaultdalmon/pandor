@@ -89,7 +89,6 @@ func Query(query string, dg *dgo.Dgraph) (api.Response, error) {
 	if err != nil {
 		logger.Logger.Fatal(err.Error())
 	}
-	fmt.Println(string(resp.Json))
 
 	return *resp, err
 }
@@ -126,7 +125,6 @@ func GetAuthorUID(name string, dg *dgo.Dgraph) (string, error) {
 
 // GetArticleUID gives the UID of a given author
 func GetArticleUID(title string, dg *dgo.Dgraph) (string, error) {
-	fmt.Println(title)
 	variables := map[string]string{"$title": title}
 	query := `query GetUID($title: string){
 							getuid(func: eq(title, $title)){

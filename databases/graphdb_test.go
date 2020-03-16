@@ -53,6 +53,7 @@ func TestDB(t *testing.T) {
 	crw := models.FormatTime("2020-03-09T08:44:03.484Z")
 	article := models.Article{
 		UID:            uidarticle,
+		ArXivID:        "0801.0003",
 		Title:          "Another Article from the same guy",
 		Abstract:       `Cluster Stuff`,
 		SubmissionDate: sub,
@@ -84,8 +85,9 @@ func TestDB(t *testing.T) {
 	sub = models.FormatTime("2007-12-28T00:00:00.000Z")
 	crw = models.FormatTime("2020-03-08T08:44:03.484Z")
 	article = models.Article{
-		UID:   uidarticle,
-		Title: "Globular clusters in the outer halo of M31: the survey",
+		UID:     uidarticle,
+		ArXivID: "0801.0002",
+		Title:   "Globular clusters in the outer halo of M31: the survey",
 		Abstract: `We report the discovery of 40 new globular clusters (GCs)
 		that have been\nfound in surveys of the halo of M31 based on INT/WFC and
 		CHFT/Megacam imagery.\nA subset of these these new GCs are of an extended,

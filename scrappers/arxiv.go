@@ -1,6 +1,7 @@
 package scrappers
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -26,12 +27,20 @@ var TempDir = "./tmp/"
 func ExtractNameFromURL(url string) (string, error) {
 	re := regexp.MustCompile(`^.*\+`)
 	if !re.MatchString(url) {
-		logger.Logger.Error("Prefix not Found")
+		re = regexp.MustCompile(`javascript`)
+		if !re.MatchString(url) {
+			logger.Logger.Fatal(fmt.Sprintf("Prefix not Found: %s ", url))
+		}
+		return "", fmt.Errorf("Prefix not Found: %s ", url)
 	}
 	prefix := re.FindString(url)
 	re = regexp.MustCompile(`/.*$`)
 	if !re.MatchString(url) {
-		logger.Logger.Error("Suffix not Found")
+		re = regexp.MustCompile(`javascript`)
+		if !re.MatchString(url) {
+			logger.Logger.Fatal(fmt.Sprintf("Prefix not Found: %s ", url))
+		}
+		return "", fmt.Errorf("Prefix not Found: %s ", url)
 	}
 	url = strings.Replace(url, prefix, "", 1)
 	suffix := re.FindString(url)
@@ -101,7 +110,12 @@ func LaunchArXiv() {
 
 		article.HTMLResponse = string(e.Response.Body)
 
-		article.MetaURL = e.Request.Ctx.Get("url")
+		article.MetaURL = e.Request.URL.String()
+		re := regexp.MustCompile(`\d{4}.(\d{5}|\d{4})`)
+		if !re.MatchString(article.MetaURL) {
+			logger.Logger.Error(fmt.Sprintf("No ID Matched for %s", article.MetaURL))
+		}
+		article.ArXivID = re.FindString(article.MetaURL)
 
 		crawlingTime := time.Now().UTC()
 		article.CrawledAt = crawlingTime
@@ -137,7 +151,7 @@ func LaunchArXiv() {
 
 		// SubmissionDate
 		SubmissionDateStr := e.ChildText(`div.dateline`)
-		re := regexp.MustCompile(`\d{2}\s\w{3}\s\d{4}`)
+		re = regexp.MustCompile(`\d{2}\s\w{3}\s\d{4}`)
 		var SubmissionDateT time.Time
 		if re.MatchString(SubmissionDateStr) {
 			SubmissionDateStrFmted := re.FindString(SubmissionDateStr)
@@ -195,21 +209,86 @@ func LaunchArXiv() {
 	})
 	// Called after OnHTML
 	c.OnScraped(func(r *colly.Response) {
+
+		conn, dg, err := databases.NewClient()
+		if err != nil {
+			logger.Logger.Error(err.Error())
+		}
+		defer conn.Close()
+
 		logger.Logger.Info(fmt.Sprintf("Finished %s", r.Request.URL))
 		URL := r.Request.URL.String()
+
 		Base := regexp.MustCompile(`.*\d{4}\.`)
+		if !Base.MatchString(URL) {
+			logger.Logger.Error(fmt.Sprintf("Wrong base in URL: %s", URL))
+		}
 		URLBase := Base.FindString(URL)
-		Number := regexp.MustCompile(`(\d{5}$)|(\d{4}$)`)
-		ArticleNumber, err := strconv.Atoi(Number.FindString(URL))
+
+		Date := regexp.MustCompile(`\d{4}\.$`)
+		if !Date.MatchString(URLBase) {
+			logger.Logger.Error(fmt.Sprintf("Wrong date in URL: %s", URLBase))
+		}
+		URLDate := Date.FindString(URLBase)
+
+		Number := regexp.MustCompile(`(\d{5}|\d{4})$`)
+		if !Number.MatchString(URL) {
+			logger.Logger.Error(fmt.Sprintf("Wrong number in URL: %s", URL))
+		}
+		URLNumber := Number.FindString(URL)
+
+		ArticleNumber, err := strconv.Atoi(URLNumber)
 		if err != nil {
 			logger.Logger.Error(fmt.Sprintf("Error: %v", err))
 		}
+
+		type Root struct {
+			Articles []models.Article `json:"getuid"`
+		}
+		var root Root
+
+		for {
+			ArticleNumber++
+			variables := map[string]string{"$id": fmt.Sprintf("%s%05d", URLDate, ArticleNumber)}
+			query := `query GetUID($id: string){
+									getuid(func: eq(arxivid, $id)){
+										uid
+								  }
+								}`
+			resp, err := databases.QueryWithVars(query, variables, dg)
+			if err != nil {
+				logger.Logger.Fatal(err.Error())
+			}
+			err = json.Unmarshal(resp.Json, &root)
+			if err != nil {
+				logger.Logger.Fatal(err.Error())
+			}
+
+			if len(root.Articles) != 0 {
+				continue
+			}
+
+			variables = map[string]string{"$id": fmt.Sprintf("%s%04d", URLDate, ArticleNumber)}
+			resp, err = databases.QueryWithVars(query, variables, dg)
+			if err != nil {
+				logger.Logger.Fatal(err.Error())
+			}
+			err = json.Unmarshal(resp.Json, &root)
+			if err != nil {
+				logger.Logger.Fatal(err.Error())
+			}
+
+			if len(root.Articles) == 0 {
+				break
+			}
+		}
 		if ArticleNumber < 100 {
 			// Visit next article
-			r.Request.Visit(fmt.Sprintf("%s%05d", URLBase, ArticleNumber+1))
-			logger.Logger.Info(fmt.Sprintf("Adding %s%05d", URLBase, ArticleNumber+1))
+			r.Request.Visit(fmt.Sprintf("%s%05d", URLBase, ArticleNumber))
+			logger.Logger.Info(fmt.Sprintf("Adding %s%05d", URLBase, ArticleNumber))
 		}
 	})
+
 	// Start scraping
 	for i := 8; i < 21; i++ {
 		for j := 1; j < 13; j++ {

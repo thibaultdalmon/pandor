@@ -7,6 +7,7 @@ import "time"
 // for bool) would be created for values not specified explicitly.
 type Article struct {
 	UID            string    `json:"uid,omitempty"`
+	ArXivID        string    `json:"arxivid,omitempty"`
 	Title          string    `json:"title,omitempty"`
 	Abstract       string    `json:"abstract,omitempty"`
 	SubmissionDate time.Time `json:"submissiondate,omitempty"`
@@ -33,6 +34,7 @@ var Schema = `
   title: string @index(term, exact, hash, fulltext, trigram) .
   name: string @index(term, exact, hash, fulltext, trigram) .
 	url: string @index(hash) .
+	arxivid: string @index(term, exact, hash, fulltext, trigram) .
   abstract: string .
   submissiondate: datetime .
   crawledat: datetime .
@@ -42,9 +44,9 @@ var Schema = `
   metaurl: string .
   authors: [uid] @reverse .
   citedpapers: [uid] @reverse .
-  wrote: [uid] .
 
   type Article {
+		arxivid: string
     title: string
     abstract: string
     submissiondate: datetime

@@ -11,7 +11,7 @@ var Logger *zap.Logger
 
 //InitLogger builds Logger
 func InitLogger() *zap.Logger {
-	l, err := zap.NewDevelopment()
+	l, err := zap.NewProduction()
 	if err != nil {
 		log.Fatalf("can't initialize zap logger: %v", err)
 	}
